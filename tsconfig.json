@@ -1,0 +1,17 @@
+{
+  // Type-checks the Node scripts and the runtime-agnostic Edge Function helpers they import.
+  // Files here run unbundled (Node type stripping / Deno), so only erasable syntax is allowed.
+  "compilerOptions": {
+    "target": "es2024",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["scripts/**/*.ts", "supabase/functions/_shared/**/*.ts"]
+}

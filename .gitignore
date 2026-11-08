@@ -1,0 +1,15 @@
+node_modules/
+.DS_Store
+*.tsbuildinfo
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# OCR bake-off: real diary pages and model outputs stay local
+scripts/fixtures/pages/*
+!scripts/fixtures/pages/.gitkeep
+scripts/out/
+
+docs
