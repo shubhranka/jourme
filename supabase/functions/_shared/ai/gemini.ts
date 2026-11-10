@@ -2,6 +2,7 @@
 
 import {
   AiError,
+  DEFAULT_MAX_OUTPUT_TOKENS,
   type ContentPart,
   type GenerateJsonOptions,
   type GenerateJsonResult,
@@ -47,6 +48,7 @@ export async function generateJsonGemini<T>(opts: GenerateJsonOptions): Promise<
         response_mime_type: "application/json",
         response_schema: toGeminiSchema(opts.schema),
         temperature: opts.temperature ?? 0.2,
+        max_output_tokens: opts.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       },
     },
     opts.timeoutMs,

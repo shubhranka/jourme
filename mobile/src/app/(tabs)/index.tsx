@@ -5,6 +5,7 @@ import { Button, IconButton } from '@/components/buttons';
 import { Card } from '@/components/card';
 import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
+import { MoodTag } from '@/components/tags';
 import { Text } from '@/components/text';
 import type { EntrySummary, Streak, WeekDayState } from '@/data/types';
 import { formatLongDate, greeting, relativeDay, toLocalDate } from '@/lib/dates';
@@ -99,9 +100,18 @@ function StreakCard({ streak }: { streak: Streak }) {
   );
 }
 
-// Before coaching (Phase 4) there's no mood, excerpt or notes yet: the card says the pages are
-// saved and opens them.
+// The design's card once Coach has read the entry; before that, where Coach is.
 function LatestEntryCard({ entry, today }: { entry: EntrySummary; today: string }) {
+  const coached = entry.status === 'ready' && entry.transcript;
+  const one = entry.pageCount === 1;
+  let link = coached ? (entry.justListen ? 'Coach listened' : plural(entry.noteCount, 'note from Coach', 'notes from Coach')) : 'See your pages';
+  let message = `${plural(entry.pageCount, 'page')} saved. Coach hasn’t read ${one ? 'it' : 'them'} yet.`;
+  if (entry.status === 'processing') message = `Coach is reading your ${one ? 'page' : 'pages'}…`;
+  if (entry.status === 'failed') {
+    message = `Coach couldn’t read ${one ? 'this page' : 'these pages'}.`;
+    link = 'Try again';
+  }
+
   return (
     <Link href={{ pathname: '/entry/[id]', params: { id: entry.id } }} asChild>
       <Pressable accessibilityRole="link">
@@ -110,17 +120,23 @@ function LatestEntryCard({ entry, today }: { entry: EntrySummary; today: string 
             <Text style={styles.muted13semi}>
               {relativeDay(entry.localDate, today)} · Entry #{entry.number}
             </Text>
-            {entry.justListen && (
+            {entry.mood ? (
+              <MoodTag mood={entry.mood} size="sm" />
+            ) : entry.justListen ? (
               <View style={styles.jlTag}>
                 <Text style={styles.jlTagText}>Just Listen</Text>
               </View>
-            )}
+            ) : null}
           </View>
-          <Text style={styles.waiting}>
-            {plural(entry.pageCount, 'page')} saved. Coach hasn’t read {entry.pageCount === 1 ? 'it' : 'them'} yet.
-          </Text>
+          {coached ? (
+            <Text style={styles.excerpt} numberOfLines={2}>
+              {entry.transcript}
+            </Text>
+          ) : (
+            <Text style={styles.waiting}>{message}</Text>
+          )}
           <View style={styles.row6}>
-            <Text style={styles.link}>{entry.pageCount === 1 ? 'See your page' : 'See your pages'}</Text>
+            <Text style={styles.link}>{link}</Text>
             <Icon name="chevronRight" size={16} strokeWidth={2} color={colors.primary} />
           </View>
         </Card>
@@ -157,6 +173,7 @@ const styles = StyleSheet.create({
   buttonLabel: { fontFamily: fonts.bold, fontSize: 15 },
   shuffle: { width: 48, height: 48, borderRadius: radii.md, borderWidth: 1, borderColor: colors.primaryLine },
   waiting: { fontSize: 15, lineHeight: 21, color: colors.inkSoft },
+  excerpt: { fontFamily: fonts.hand, fontSize: 22, lineHeight: 27.5, color: colors.handInk },
   link: { fontFamily: fonts.semibold, fontSize: 14, color: colors.primary },
   jlTag: { borderRadius: radii.pill, paddingVertical: 4, paddingHorizontal: 10, backgroundColor: colors.navy },
   jlTagText: { fontFamily: fonts.bold, fontSize: 12, color: '#FFFFFF' },

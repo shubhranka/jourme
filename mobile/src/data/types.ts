@@ -16,6 +16,7 @@ export type NoteTag = { kind: 'grammar' | 'vocab'; label: string };
 
 export type CoachNote = { title: string; body: string; tag: NoteTag };
 
+// A coached entry, as the feedback screen shows it.
 export type Entry = {
   id: string;
   number: number;
@@ -27,9 +28,9 @@ export type Entry = {
   coachReply: string;
   corrections: Correction[];
   notes: CoachNote[];
-  nativeVersion: string;
-  nativeScore: number;
-  scoreDeltaVsLastWeek: number;
+  nativeVersion: string | null;
+  nativeScore: number | null; // null for Just Listen
+  scoreDeltaVsLastWeek: number | null; // null without scores the week before
   avgSentenceLength: number;
 };
 
@@ -47,7 +48,7 @@ export type Prompt = { id: number; text: string };
 // uploading → uploaded → processing → ready | failed (the coach, Phase 4)
 export type EntryStatus = 'uploading' | 'uploaded' | 'processing' | 'ready' | 'failed';
 
-// A saved entry before (or without) coaching, as listed on Today.
+// A saved entry as listed on Today.
 export type EntrySummary = {
   id: string;
   number: number;
@@ -55,11 +56,22 @@ export type EntrySummary = {
   status: EntryStatus;
   justListen: boolean;
   pageCount: number;
+  mood: Mood | null; // set once coached
+  transcript: string | null;
+  noteCount: number;
 };
 
 export type EntryPage = { index: number; url: string | null };
 
-export type SavedEntry = EntrySummary & { pages: EntryPage[] };
+export type SavedEntry = EntrySummary & {
+  pages: EntryPage[];
+  heavy: boolean;
+  safetyFlag: boolean;
+  savedAt: string | null;
+  // Why the last coaching attempt failed, when it's something the writer can act on.
+  failReason: 'no_handwriting' | null;
+  feedback: Entry | null; // when status is ready
+};
 
 export type TrackerStatus = 'needs-work' | 'improving' | 'new' | 'mastered';
 

@@ -13,6 +13,7 @@ import { Button, IconButton } from '@/components/buttons';
 import { Icon } from '@/components/icon';
 import { Text } from '@/components/text';
 import { useUserId } from '@/lib/auth';
+import { startCoaching } from '@/lib/coach';
 import { useEntrySaved, useTodayPrompt } from '@/lib/entries';
 import { plural } from '@/lib/text';
 import { MAX_PAGES, uploadEntry, uploadErrorMessage, type CapturedPage } from '@/lib/upload';
@@ -63,8 +64,10 @@ export default function ScanScreen() {
         onEntryCreated: setEntryId,
         onProgress: (saved, total) => setProgress({ saved, total }),
       }),
-    onSuccess: (id) => {
+    onSuccess: async (id) => {
       entrySaved();
+      // Hand the pages to Coach. If that fails, the entry screen offers "Get feedback".
+      await startCoaching(id).catch(() => undefined);
       router.replace({ pathname: '/entry/[id]', params: { id } });
     },
   });

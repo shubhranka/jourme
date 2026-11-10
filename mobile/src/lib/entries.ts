@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { EntryStatus, EntrySummary, ProfileStats, Prompt, SavedEntry, Streak, WeekDayState } from '@/data/types';
+import type { CoachNote, Correction, Entry, EntryStatus, EntrySummary, Mood, Persona, ProfileStats, Prompt, SavedEntry, Streak, WeekDayState } from '@/data/types';
 
 import { useUserId } from './auth';
 import { supabase } from './supabase';
@@ -67,13 +67,41 @@ export function useProfileStats() {
   });
 }
 
+// How the coach stores each correction (entries.corrections); offsets index the transcript.
+type CorrectionRow = {
+  kind: 'grammar' | 'vocab';
+  start: number;
+  end: number;
+  original: string;
+  replacement: string;
+  error_type: string;
+  note_title: string;
+  note_body: string;
+  tag: string;
+};
+
 type SummaryRow = {
   id: string;
   entry_number: number | null;
   local_date: string;
   status: EntryStatus;
   just_listen: boolean;
+  mood: Mood | null;
+  transcript: string | null;
+  corrections: unknown;
 };
+
+const corrections = (json: unknown): CorrectionRow[] => (Array.isArray(json) ? (json as CorrectionRow[]) : []);
+
+// One note per distinct title: the coach may mark the same word twice.
+function notesOf(rows: CorrectionRow[]): CoachNote[] {
+  const seen = new Set<string>();
+  return rows.flatMap((c) => {
+    if (!c.note_title || seen.has(c.note_title)) return [];
+    seen.add(c.note_title);
+    return [{ title: c.note_title, body: c.note_body, tag: { kind: c.kind, label: c.tag } }];
+  });
+}
 
 function toSummary(row: SummaryRow, pageCount: number): EntrySummary {
   return {
@@ -83,6 +111,40 @@ function toSummary(row: SummaryRow, pageCount: number): EntrySummary {
     status: row.status,
     justListen: row.just_listen,
     pageCount,
+    mood: row.mood,
+    transcript: row.transcript,
+    noteCount: notesOf(corrections(row.corrections)).length,
+  };
+}
+
+type FeedbackRow = SummaryRow & {
+  coach_persona: Persona | null;
+  coach_reply: string | null;
+  native_version: string | null;
+  native_score: number | null;
+  score_delta: number | null;
+  avg_sentence_len: number | null;
+};
+
+function toFeedback(row: FeedbackRow): Entry {
+  const rows = corrections(row.corrections);
+  return {
+    id: row.id,
+    number: row.entry_number ?? 0,
+    localDate: row.local_date,
+    mood: row.mood ?? 'calm',
+    justListen: row.just_listen,
+    transcript: row.transcript ?? '',
+    persona: row.coach_persona ?? 'cheerleader',
+    coachReply: row.coach_reply ?? '',
+    corrections: rows.map(
+      (c): Correction => (c.kind === 'grammar' ? { kind: 'grammar', start: c.start, end: c.end, replacement: c.replacement } : { kind: 'vocab', start: c.start, end: c.end }),
+    ),
+    notes: notesOf(rows),
+    nativeVersion: row.native_version,
+    nativeScore: row.native_score,
+    scoreDeltaVsLastWeek: row.score_delta,
+    avgSentenceLength: row.avg_sentence_len ?? 0,
   };
 }
 
@@ -95,7 +157,7 @@ export function useLatestEntry() {
     queryFn: async (): Promise<EntrySummary | null> => {
       const { data, error } = await supabase
         .from('entries')
-        .select('id, entry_number, local_date, status, just_listen, entry_pages(count)')
+        .select('id, entry_number, local_date, status, just_listen, mood, transcript, corrections, entry_pages(count)')
         .neq('status', 'uploading')
         .order('created_at', { ascending: false })
         .limit(1)
@@ -109,20 +171,29 @@ export function useLatestEntry() {
 // Signed photo links last an hour; refetch well before that.
 const PAGE_URL_SECONDS = 60 * 60;
 
+const ENTRY_COLUMNS =
+  'id, entry_number, local_date, status, just_listen, mood, transcript, corrections, heavy, safety_flag, saved_at, coach_error, ' +
+  'coach_persona, coach_reply, native_version, native_score, score_delta, avg_sentence_len, entry_pages(page_index, storage_path)';
+
+// Polls every 3 s while the coach is reading.
 export function useSavedEntry(id: string) {
   return useQuery({
     queryKey: entryKeys.entry(id),
     staleTime: 30 * 60 * 1000,
+    refetchInterval: (query) => (query.state.data?.status === 'processing' ? 3000 : false),
     queryFn: async (): Promise<SavedEntry | null> => {
-      const { data, error } = await supabase
-        .from('entries')
-        .select('id, entry_number, local_date, status, just_listen, entry_pages(page_index, storage_path)')
-        .eq('id', id)
-        .maybeSingle();
+      const { data, error } = await supabase.from('entries').select(ENTRY_COLUMNS).eq('id', id).maybeSingle();
       if (error) throw error;
       if (!data) return null;
+      const row = data as unknown as FeedbackRow & {
+        heavy: boolean;
+        safety_flag: boolean;
+        saved_at: string | null;
+        coach_error: string | null;
+        entry_pages: { page_index: number; storage_path: string }[];
+      };
 
-      const pages = [...data.entry_pages].sort((a, b) => a.page_index - b.page_index);
+      const pages = [...row.entry_pages].sort((a, b) => a.page_index - b.page_index);
       let urls: (string | null)[] = pages.map(() => null);
       if (pages.length > 0) {
         const signed = await supabase.storage.from('pages').createSignedUrls(
@@ -133,8 +204,13 @@ export function useSavedEntry(id: string) {
         urls = signed.data.map((s) => s.signedUrl ?? null);
       }
       return {
-        ...toSummary(data, pages.length),
+        ...toSummary(row, pages.length),
         pages: pages.map((p, i) => ({ index: p.page_index, url: urls[i] })),
+        heavy: row.heavy,
+        safetyFlag: row.safety_flag,
+        savedAt: row.saved_at,
+        failReason: row.status === 'failed' && row.coach_error?.startsWith('no_handwriting') ? 'no_handwriting' : null,
+        feedback: row.status === 'ready' ? toFeedback(row) : null,
       };
     },
   });

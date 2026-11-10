@@ -2,6 +2,7 @@
 
 import {
   AiError,
+  DEFAULT_MAX_OUTPUT_TOKENS,
   type ContentPart,
   type GenerateJsonOptions,
   type GenerateJsonResult,
@@ -44,6 +45,7 @@ export async function generateJsonOpenRouter<T>(opts: GenerateJsonOptions): Prom
         type: "json_schema",
         json_schema: { name: opts.schemaName, strict: true, schema: toStrictSchema(opts.schema) },
       },
+      max_tokens: opts.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       provider: {
         // Route only to endpoints that honour the JSON schema...
         require_parameters: true,

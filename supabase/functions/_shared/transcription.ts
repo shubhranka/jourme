@@ -6,6 +6,7 @@ import type { JsonSchema } from "./ai/index.ts";
 export const TRANSCRIPTION_RULES = `You are transcribing photos of a handwritten journal page written by an English learner.
 
 Transcription rules:
+- Transcribe only handwriting on paper. Ignore printed text, screens, labels and anything in the background. If there is no handwriting at all (for example a screenshot or an unrelated photo), return an empty transcript.
 - Copy the text exactly as written, word for word, in reading order across all pages.
 - Keep every spelling, grammar and punctuation mistake the writer made. Never correct, improve or complete their English. A wrong verb tense, a missing article or a misspelling must appear in the transcript exactly as on the page.
 - Ignore words the writer crossed out.

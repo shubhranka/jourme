@@ -409,8 +409,11 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# [edge_runtime.secrets]
-# secret_key = "env(SECRET_VALUE)"
+# Secrets for local functions, read from the repo-root .env. Hosted: `supabase secrets set`.
+# AI_MODEL is a free OpenRouter model (the project uses free models only); it isn't secret.
+[edge_runtime.secrets]
+OPENROUTER_API_KEY = "env(OPENROUTER_API_KEY)"
+AI_MODEL = "dots-studio/dots-3-note-preview:free"
 
 [analytics]
 enabled = true

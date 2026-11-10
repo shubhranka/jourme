@@ -26,8 +26,13 @@ export type GenerateJsonOptions = {
   schema: JsonSchema;
   schemaName: string;
   temperature?: number;
+  // Hard cap on the reply, reasoning included. Without one, OpenRouter reserves credit for the
+  // model's maximum (often 64k tokens) and refuses the call if the account can't cover that.
+  maxOutputTokens?: number;
   timeoutMs?: number;
 };
+
+export const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 
 export type AiUsage = {
   inputTokens?: number;
