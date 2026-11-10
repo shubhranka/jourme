@@ -409,11 +409,18 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# Secrets for local functions, read from the repo-root .env. Hosted: `supabase secrets set`.
-# AI_MODEL is a free OpenRouter model (the project uses free models only); it isn't secret.
+# Secrets for local functions, read from the repo-root .env (see .env.example). Hosted:
+# `supabase secrets set`. AI_PROVIDER switches the coach between openrouter (default), groq and
+# gemini; each has a free default model, overridable with <PROVIDER>_MODEL. Anything unset in
+# .env arrives as a literal "env(NAME)", which the function treats as unset.
 [edge_runtime.secrets]
+AI_PROVIDER = "env(AI_PROVIDER)"
 OPENROUTER_API_KEY = "env(OPENROUTER_API_KEY)"
-AI_MODEL = "dots-studio/dots-3-note-preview:free"
+GROQ_API_KEY = "env(GROQ_API_KEY)"
+GEMINI_API_KEY = "env(GEMINI_API_KEY)"
+OPENROUTER_MODEL = "env(OPENROUTER_MODEL)"
+GROQ_MODEL = "env(GROQ_MODEL)"
+GEMINI_MODEL = "env(GEMINI_MODEL)"
 
 [analytics]
 enabled = true

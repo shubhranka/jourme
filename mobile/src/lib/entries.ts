@@ -175,6 +175,14 @@ const ENTRY_COLUMNS =
   'id, entry_number, local_date, status, just_listen, mood, transcript, corrections, heavy, safety_flag, saved_at, coach_error, ' +
   'coach_persona, coach_reply, native_version, native_score, score_delta, avg_sentence_len, entry_pages(page_index, storage_path)';
 
+// process-entry starts coach_error with a code when the writer can do something about it.
+function failReason(error: string | null): SavedEntry['failReason'] {
+  if (error?.startsWith('no_handwriting')) return { kind: 'no_handwriting' };
+  const pages = error?.match(/^too_many_pages: .*?(\d+) pages/);
+  if (pages) return { kind: 'too_many_pages', max: Number(pages[1]) };
+  return null;
+}
+
 // Polls every 3 s while the coach is reading.
 export function useSavedEntry(id: string) {
   return useQuery({
@@ -209,7 +217,7 @@ export function useSavedEntry(id: string) {
         heavy: row.heavy,
         safetyFlag: row.safety_flag,
         savedAt: row.saved_at,
-        failReason: row.status === 'failed' && row.coach_error?.startsWith('no_handwriting') ? 'no_handwriting' : null,
+        failReason: row.status === 'failed' ? failReason(row.coach_error) : null,
         feedback: row.status === 'ready' ? toFeedback(row) : null,
       };
     },

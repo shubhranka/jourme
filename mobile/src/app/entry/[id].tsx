@@ -276,9 +276,11 @@ function SavedEntryScreen({ id, back }: { id: string; back: () => void }) {
         ) : (
           <View style={{ gap: 12 }}>
             <Text style={styles.bubbleText}>
-              {entry.failReason === 'no_handwriting'
+              {entry.failReason?.kind === 'no_handwriting'
                 ? `I couldn’t find any handwriting in ${one ? 'this photo' : 'these photos'}. Scan your notebook page, or try again if I got it wrong.`
-                : entry.status === 'failed'
+                : entry.failReason?.kind === 'too_many_pages'
+                  ? `I can read up to ${entry.failReason.max} pages at once right now, and this entry has ${entry.pageCount}. Scan it again as shorter entries.`
+                  : entry.status === 'failed'
                   ? `I couldn’t read ${one ? 'this page' : 'these pages'} just now.`
                   : `${one ? 'Your page is' : 'Your pages are'} saved. I haven’t read ${one ? 'it' : 'them'} yet.`}
             </Text>

@@ -7,18 +7,21 @@ import { encodeBase64 } from "jsr:@std/encoding@1/base64";
 import { withSupabase } from "npm:@supabase/server@1.9.2";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
-import { AiError, API_KEY_ENV, type AiUsage, type ContentPart, generateJson, providerFor } from "../_shared/ai/index.ts";
+import { AiError, type AiUsage, type ContentPart, generateJson, PROVIDER_SETTINGS, resolveAiConfig } from "../_shared/ai/index.ts";
 import { type AlignedCorrection, alignCorrections } from "../_shared/coach/align.ts";
 import { computeMetrics, CRUTCH_WORDS } from "../_shared/coach/metrics.ts";
 import { coachPrompt, type LearnerContext, listenPrompt, userInstruction } from "../_shared/coach/prompt.ts";
-import { COACH_SCHEMA, type CoachResult, LISTEN_SCHEMA, type ListenResult } from "../_shared/coach/schema.ts";
+import { COACH_SCHEMA, type CoachResult, LISTEN_SCHEMA, type ListenResult, type ModelCorrection } from "../_shared/coach/schema.ts";
 import { nativeScore, SCORE_VERSION } from "../_shared/coach/score.ts";
 import { ERROR_TYPE_SLUGS, type ErrorType, MOODS } from "../_shared/coach/taxonomy.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
-// Free models only (see docs). Override with the AI_MODEL secret.
-const MODEL = Deno.env.get("AI_MODEL") || "dots-studio/dots-3-note-preview:free";
+// AI_PROVIDER picks openrouter (default), groq or gemini, each with a free default model
+// (overridable with <PROVIDER>_MODEL). See _shared/ai/config.ts.
+const AI = resolveAiConfig((name) => Deno.env.get(name));
+if (AI.warning) console.warn(`process-entry: ${AI.warning}`);
+const MODEL_LABEL = `${AI.provider}:${AI.model}`;
 // The function's wall clock is 150 s on the free plan; leave room to save the result.
 const AI_TIMEOUT_MS = 110_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -33,14 +36,14 @@ export default {
       return Response.json({ error: "bad_request" }, { status: 400 });
     }
     const userId = ctx.userClaims!.id;
-    const apiKey = Deno.env.get(API_KEY_ENV[providerFor(MODEL)]);
+    const apiKey = AI.apiKey;
     if (!apiKey) {
-      console.error(`process-entry: ${API_KEY_ENV[providerFor(MODEL)]} is not set`);
+      console.error(`process-entry: AI_PROVIDER is ${AI.provider} but ${PROVIDER_SETTINGS[AI.provider].keyEnv} is not set`);
       return Response.json({ error: "not_configured" }, { status: 500 });
     }
 
     const admin = ctx.supabaseAdmin;
-    const claim = await admin.rpc("coach_claim", { p_user_id: userId, p_entry_id: entryId, p_model: MODEL }).single();
+    const claim = await admin.rpc("coach_claim", { p_user_id: userId, p_entry_id: entryId, p_model: MODEL_LABEL }).single();
     if (claim.error) {
       if (claim.error.message === "daily_limit") return Response.json({ error: "daily_limit" }, { status: 429 });
       if (claim.error.message === "not_ready" || claim.error.message === "no_profile") {
@@ -62,24 +65,33 @@ async function coach(admin: SupabaseClient, job: Job) {
   try {
     const [context, pages] = await Promise.all([loadLearner(admin, job.userId), loadPages(admin, job.entryId)]);
     const request = {
+      provider: AI.provider,
       apiKey: job.apiKey,
-      model: MODEL,
+      model: AI.model,
       parts: [{ type: "text" as const, text: userInstruction(pages.length) }, ...pages],
-      maxOutputTokens: 8192,
+      maxOutputTokens: AI.maxOutputTokens,
       timeoutMs: AI_TIMEOUT_MS,
     };
 
-    let result: Record<string, unknown>;
-    let usage: AiUsage;
-    let latencyMs: number;
-    if (job.justListen) {
-      const res = await generateJson<ListenResult>({ ...request, system: listenPrompt(context), schema: LISTEN_SCHEMA, schemaName: "just_listen" });
-      result = listenResult(res.data, context, res.model);
-      ({ usage, latencyMs } = res);
-    } else {
-      const res = await generateJson<CoachResult>({ ...request, system: coachPrompt(context), schema: COACH_SCHEMA, schemaName: "coach" });
-      result = await coachResult(admin, job.userId, res.data, context, res.model);
-      ({ usage, latencyMs } = res);
+    // One more try if the model's reply comes back empty or incomplete.
+    let result: Record<string, unknown> | undefined;
+    let usage: AiUsage = {};
+    let latencyMs = 0;
+    for (let attempt = 1; !result; attempt++) {
+      try {
+        if (job.justListen) {
+          const res = await generateJson<ListenResult>({ ...request, system: listenPrompt(context), schema: LISTEN_SCHEMA, schemaName: "just_listen" });
+          ({ usage, latencyMs } = res);
+          result = listenResult(res.data, context, res.model);
+        } else {
+          const res = await generateJson<CoachResult>({ ...request, system: coachPrompt(context), schema: COACH_SCHEMA, schemaName: "coach" });
+          ({ usage, latencyMs } = res);
+          result = await coachResult(admin, job.userId, res.data, context, res.model);
+        }
+      } catch (err) {
+        if (!(err instanceof IncompleteReply) || attempt >= 2) throw err;
+        console.warn("process-entry: incomplete reply, trying again", job.entryId, err.message);
+      }
     }
 
     const saved = await admin.rpc("coach_save", {
@@ -113,6 +125,8 @@ async function loadPages(admin: SupabaseClient, entryId: string): Promise<Conten
   const { data, error } = await admin.from("entry_pages").select("storage_path").eq("entry_id", entryId).order("page_index");
   if (error) throw error;
   if (!data.length) throw new Error("The entry has no pages");
+  // Some providers take few images per request (Groq: 3). The app explains this reason.
+  if (data.length > AI.maxImages) throw new Error(`${TOO_MANY_PAGES}: ${AI.provider} reads at most ${AI.maxImages} pages`);
   return Promise.all(
     data.map(async (p: { storage_path: string }) => {
       const file = await admin.storage.from("pages").download(p.storage_path);
@@ -123,19 +137,33 @@ async function loadPages(admin: SupabaseClient, entryId: string): Promise<Conten
 }
 
 // The model is asked for strict JSON, but free models can still drift: keep only what fits.
-// coach_error starts with this when the photos had no handwriting; the app explains it.
+// coach_error starts with one of these when the writer can act on the failure; the app explains them.
 const NO_HANDWRITING = "no_handwriting";
+const TOO_MANY_PAGES = "too_many_pages";
+
+// A reply worth one more try (empty or incomplete), as opposed to a real answer like "no handwriting".
+class IncompleteReply extends Error {}
 
 function readingFields(data: ListenResult) {
-  if (typeof data?.transcript !== "string" || !data.transcript.trim()) throw new Error(`${NO_HANDWRITING}: the model found no handwriting`);
+  if (data?.handwritten === false) throw new Error(`${NO_HANDWRITING}: the model saw no handwriting`);
+  if (typeof data?.transcript !== "string" || !data.transcript.trim()) {
+    // Asked about handwriting and said yes (or didn't say), yet nothing transcribed: try again;
+    // a second empty reply is treated as no handwriting.
+    throw new IncompleteReply(`${NO_HANDWRITING}: the model returned no transcript`);
+  }
   return {
     transcript: data.transcript.trim(),
     uncertain_words: Array.isArray(data.uncertain_words) ? data.uncertain_words.filter((w) => typeof w === "string") : [],
     mood: MOODS.includes(data.mood) ? data.mood : "calm",
     heavy: data.heavy === true,
     safety_flag: data.safety_flag === true,
-    coach_reply: typeof data.coach_reply === "string" ? data.coach_reply.trim() : "",
+    coach_reply: requireReply(data.coach_reply),
   };
+}
+
+function requireReply(reply: unknown): string {
+  if (typeof reply !== "string" || !reply.trim()) throw new IncompleteReply("The model returned no reply");
+  return reply.trim();
 }
 
 function listenResult(data: ListenResult, learner: LearnerContext, model: string | undefined) {
@@ -144,16 +172,22 @@ function listenResult(data: ListenResult, learner: LearnerContext, model: string
     ...reading,
     coach_persona: learner.persona,
     word_count: computeMetrics(reading.transcript).wordCount,
-    coach_model: model ?? MODEL,
+    coach_model: `${AI.provider}:${model ?? AI.model}`,
   };
 }
 
 async function coachResult(admin: SupabaseClient, userId: string, data: CoachResult, learner: LearnerContext, model: string | undefined) {
   const reading = readingFields(data);
   const metrics = computeMetrics(reading.transcript);
-  const corrections = (Array.isArray(data.corrections) ? data.corrections : []).filter(
-    (c) => c && (c.kind === "grammar" || c.kind === "vocab") && typeof c.original === "string" && typeof c.replacement === "string",
-  );
+  // Some providers only promise valid JSON, not the schema's shape (Groq with images): normalise.
+  const corrections: ModelCorrection[] = (Array.isArray(data.corrections) ? data.corrections : [])
+    .filter((c) => c && (c.kind === "grammar" || c.kind === "vocab") && typeof c.original === "string" && typeof c.replacement === "string")
+    .map((c) => ({
+      ...c,
+      error_type: knownType(c.error_type),
+      note_title: String(c.note_title ?? "").trim(),
+      note_body: String(c.note_body ?? "").trim(),
+    }));
   const { aligned } = alignCorrections(reading.transcript, corrections, reading.uncertain_words);
   const grammar = aligned.filter((c) => c.kind === "grammar");
   const tags = await noteTags(admin, userId, aligned);
@@ -181,7 +215,7 @@ async function coachResult(admin: SupabaseClient, userId: string, data: CoachRes
     avg_sentence_len: metrics.avgSentenceLength,
     word_count: metrics.wordCount,
     correct_patterns: (Array.isArray(data.correct_patterns) ? data.correct_patterns : []).filter((t) => ERROR_TYPE_SLUGS.includes(t)),
-    coach_model: model ?? MODEL,
+    coach_model: `${AI.provider}:${model ?? AI.model}`,
     mistakes: grammar.map((c) => ({ error_type: knownType(c.error_type), original: c.original, corrected: c.replacement.trim() })),
     crutch: metrics.crutch.map(({ word, count }) => ({
       word,
@@ -191,8 +225,8 @@ async function coachResult(admin: SupabaseClient, userId: string, data: CoachRes
   };
 }
 
-function knownType(t: string): ErrorType {
-  return (ERROR_TYPE_SLUGS as string[]).includes(t) ? (t as ErrorType) : "other";
+function knownType(t: unknown): ErrorType {
+  return typeof t === "string" && (ERROR_TYPE_SLUGS as string[]).includes(t) ? (t as ErrorType) : "other";
 }
 
 // "New" for a first-ever mistake type, "Seen N× this week" when it keeps coming back, "Seen

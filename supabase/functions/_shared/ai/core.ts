@@ -1,7 +1,7 @@
 // Provider-neutral types and HTTP plumbing shared by the AI adapters.
 // Runtime-agnostic (fetch only) so the Edge Functions and the Node scripts share it.
 
-export type AiProvider = "gemini" | "openrouter";
+export type AiProvider = "gemini" | "openrouter" | "groq";
 
 export type ContentPart =
   | { type: "text"; text: string }
@@ -19,6 +19,7 @@ export type JsonSchema = {
 };
 
 export type GenerateJsonOptions = {
+  provider: AiProvider;
   apiKey: string;
   model: string;
   system?: string;
@@ -64,6 +65,20 @@ export class AiError extends Error {
 
 const RETRY_STATUSES = new Set([408, 429, 500, 502, 503]);
 const MAX_ATTEMPTS = 3;
+// Honour a 429's retry-after up to this long; beyond it, fail fast rather than hang. Groq's free
+// tier allows ~2 coaching calls a minute (7k input tokens) and asks for waits of up to ~60 s;
+// process-entry has 150 s of wall clock, and a Groq call takes seconds.
+const MAX_RETRY_AFTER_MS = 60_000;
+
+// Seconds to wait from a retry-after header, or the default backoff.
+export function retryDelayMs(retryAfter: string | null, attempt: number): number | null {
+  const backoff = 1000 * 2 ** (attempt - 1);
+  if (retryAfter === null) return backoff;
+  const seconds = Number(retryAfter);
+  if (!Number.isFinite(seconds) || seconds < 0) return backoff;
+  const ms = Math.ceil(seconds * 1000);
+  return ms > MAX_RETRY_AFTER_MS ? null : Math.max(ms, 250);
+}
 
 export async function postJson(
   provider: AiProvider,
@@ -83,10 +98,11 @@ export async function postJson(
     if (res.ok) return res.json();
 
     const errBody = await res.text();
-    if (!RETRY_STATUSES.has(res.status) || attempt >= MAX_ATTEMPTS) {
+    const wait = res.status === 429 ? retryDelayMs(res.headers.get("retry-after"), attempt) : 1000 * 2 ** (attempt - 1);
+    if (!RETRY_STATUSES.has(res.status) || attempt >= MAX_ATTEMPTS || wait === null) {
       throw new AiError(provider, `${provider} HTTP ${res.status}`, res.status, errBody);
     }
-    await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1)));
+    await new Promise((r) => setTimeout(r, wait));
   }
 }
 

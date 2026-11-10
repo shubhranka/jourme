@@ -14,6 +14,7 @@ export type ModelCorrection = {
 };
 
 export type CoachResult = {
+  handwritten: boolean;
   transcript: string;
   uncertain_words: string[];
   mood: Mood;
@@ -27,11 +28,15 @@ export type CoachResult = {
 };
 
 // Just Listen: the same reading, a longer reply, and no English feedback at all.
-export type ListenResult = Pick<CoachResult, "transcript" | "uncertain_words" | "mood" | "heavy" | "safety_flag" | "coach_reply">;
+export type ListenResult = Pick<CoachResult, "handwritten" | "transcript" | "uncertain_words" | "mood" | "heavy" | "safety_flag" | "coach_reply">;
 
 const transcription = TRANSCRIPTION_SCHEMA.properties!;
 
 const listenProperties: Record<string, JsonSchema> = {
+  handwritten: {
+    type: "boolean",
+    description: "True if the photos show handwriting on paper. False for screenshots, printed pages or unrelated photos.",
+  },
   transcript: transcription.transcript,
   uncertain_words: transcription.uncertain_words,
   mood: { type: "string", enum: [...MOODS], description: "The main feeling. Use stressed for sad, angry or anxious too." },

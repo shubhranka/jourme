@@ -1,21 +1,28 @@
-// Entry point for structured-JSON model calls. The provider is picked from the model id:
-// OpenRouter ids are "vendor/model" (e.g. "anthropic/claude-sonnet-5.5"), Gemini ids have no slash.
+// Entry point for structured-JSON model calls. The caller names the provider (see config.ts:
+// AI_PROVIDER picks it for the app).
 
 import type { AiProvider, GenerateJsonOptions, GenerateJsonResult } from "./core.ts";
+import { PROVIDER_SETTINGS } from "./config.ts";
 import { generateJsonGemini } from "./gemini.ts";
+import { generateJsonGroq } from "./groq.ts";
 import { generateJsonOpenRouter } from "./openrouter.ts";
 
+export * from "./config.ts";
 export * from "./core.ts";
 
 export const API_KEY_ENV: Record<AiProvider, string> = {
-  gemini: "GEMINI_API_KEY",
-  openrouter: "OPENROUTER_API_KEY",
+  openrouter: PROVIDER_SETTINGS.openrouter.keyEnv,
+  groq: PROVIDER_SETTINGS.groq.keyEnv,
+  gemini: PROVIDER_SETTINGS.gemini.keyEnv,
 };
 
-export function providerFor(model: string): AiProvider {
-  return model.includes("/") ? "openrouter" : "gemini";
-}
-
 export function generateJson<T>(opts: GenerateJsonOptions): Promise<GenerateJsonResult<T>> {
-  return providerFor(opts.model) === "openrouter" ? generateJsonOpenRouter<T>(opts) : generateJsonGemini<T>(opts);
+  switch (opts.provider) {
+    case "openrouter":
+      return generateJsonOpenRouter<T>(opts);
+    case "groq":
+      return generateJsonGroq<T>(opts);
+    case "gemini":
+      return generateJsonGemini<T>(opts);
+  }
 }

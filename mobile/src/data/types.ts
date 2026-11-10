@@ -69,7 +69,7 @@ export type SavedEntry = EntrySummary & {
   safetyFlag: boolean;
   savedAt: string | null;
   // Why the last coaching attempt failed, when it's something the writer can act on.
-  failReason: 'no_handwriting' | null;
+  failReason: { kind: 'no_handwriting' } | { kind: 'too_many_pages'; max: number } | null;
   feedback: Entry | null; // when status is ready
 };
 
