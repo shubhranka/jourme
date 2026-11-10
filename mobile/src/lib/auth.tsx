@@ -34,6 +34,10 @@ export function useAuth(): AuthState {
   return use(AuthContext);
 }
 
+export function useUserId(): string | undefined {
+  return useAuth().session?.user.id;
+}
+
 // New and returning users take the same path: the code signs them up or in.
 export async function sendCode(email: string): Promise<void> {
   const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });

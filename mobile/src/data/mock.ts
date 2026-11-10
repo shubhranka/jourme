@@ -1,29 +1,12 @@
-// Phase 1 fixture data, matching the copy in the design. Replaced by Supabase queries in Phases 2–5.
+// Design fixture data still shown on Journal, Progress and the sample entries they link to.
+// Replaced by Supabase queries in Phases 4–5.
 
-import type { Correction, Entry, LocalDate, Mood, ProfileStats, Progress, Streak } from './types';
+import type { Correction, Entry, LocalDate, Mood, Progress } from './types';
 
 export const MOCK_TODAY: LocalDate = '2026-10-27';
 
-// The profile itself is real since Phase 2; these totals come from entries (Phase 3).
-export const stats: ProfileStats = {
-  entryCount: 142,
-  wordCount: 9860,
-  pageCount: 142,
-};
 
-export const streak: Streak = {
-  days: 23,
-  writtenToday: false,
-  week: ['done', 'today', 'empty', 'empty', 'empty', 'empty', 'empty'],
-};
 
-export const prompts = [
-  'What was the best thing you ate today?',
-  'Who made you smile today, and why?',
-  'What is one small thing you want to remember about this week?',
-  'Describe a place you walked past today as if to a friend.',
-  'What did you learn today that surprised you?',
-];
 
 // Offsets of the nth occurrence of `phrase` in `text`, so fixtures can't drift from their transcript.
 function at(text: string, phrase: string, nth = 1): { start: number; end: number } {
@@ -146,9 +129,7 @@ export const entries: Record<string, Entry> = {
   },
 };
 
-export const latestEntryId = '141';
 export const onThisDayEntryId = '17';
-export const scanResultEntryId = '142';
 
 // October 2026 moods, one letter per day from the 1st; '-' = no entry.
 const OCTOBER = 'HC-GSSCHGHCSHGGCHSSCGHHCGGH';

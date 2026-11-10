@@ -23,7 +23,67 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "profiles": {
+            "daily_prompts": {
+                  Row: {
+                    "local_date": string,"prompt_id": number,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "local_date": string,"prompt_id": number,"user_id": string
+                  }
+                  Update: {
+                    "local_date"?: string,"prompt_id"?: number,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "daily_prompts_prompt_id_fkey"
+      columns: ["prompt_id"]
+isOneToOne: false
+      referencedRelation: "prompts"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"entries": {
+                  Row: {
+                    "created_at": string,"entry_number": number | null,"id": string,"just_listen": boolean,"local_date": string,"prompt_id": number | null,"status": Database["public"]['Enums']["entry_status"],"updated_at": string,"user_id": string,"word_count": number | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"entry_number"?: number | null,"id"?: string,"just_listen"?: boolean,"local_date"?: string,"prompt_id"?: number | null,"status"?: Database["public"]['Enums']["entry_status"],"updated_at"?: string,"user_id"?: string,"word_count"?: number | null
+                  }
+                  Update: {
+                    "created_at"?: string,"entry_number"?: number | null,"id"?: string,"just_listen"?: boolean,"local_date"?: string,"prompt_id"?: number | null,"status"?: Database["public"]['Enums']["entry_status"],"updated_at"?: string,"user_id"?: string,"word_count"?: number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "entries_prompt_id_fkey"
+      columns: ["prompt_id"]
+isOneToOne: false
+      referencedRelation: "prompts"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"entry_pages": {
+                  Row: {
+                    "created_at": string,"entry_id": string,"page_index": number,"storage_path": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"entry_id": string,"page_index": number,"storage_path": string
+                  }
+                  Update: {
+                    "created_at"?: string,"entry_id"?: string,"page_index"?: number,"storage_path"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "entry_pages_entry_id_fkey"
+      columns: ["entry_id"]
+isOneToOne: false
+      referencedRelation: "entries"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"profiles": {
                   Row: {
                     "created_at": string,"display_name": string,"expo_push_token": string | null,"id": string,"learning_goal": string,"native_language": string,"nudge_time": string,"offer_just_listen": boolean,"persona": Database["public"]['Enums']["persona"],"timezone": string,"updated_at": string
                   }
@@ -37,18 +97,64 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"prompts": {
+                  Row: {
+                    "id": number,"text": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "id"?: never,"text": string
+                  }
+                  Update: {
+                    "id"?: never,"text"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 }
           }
           Views: {
             [_ in never]: never
           }
           Functions: {
-            "is_valid_timezone":
+            "complete_entry_upload":
+{ Args: { "p_entry_id": string }; Returns: undefined
+                           },
+"get_profile_stats":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "entry_count": number,"page_count": number,"word_count": number
+            }[]
+                           },
+"get_streak":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "days": number,"today": string,"week": (string)[],"written_today": boolean
+            }[]
+                           },
+"get_today_prompt":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "id": number,"text": string
+            }[]
+                           },
+"is_valid_timezone":
 { Args: { "tz": string }; Returns: boolean
+                           },
+"journal_date":
+{ Args: { "at": string,"tz": string }; Returns: string
+                           },
+"pick_prompt":
+{ Args: { "not_this": number,"uid": string }; Returns: number
+                           },
+"shuffle_today_prompt":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "id": number,"text": string
+            }[]
+                           },
+"user_today":
+{ Args: Record<PropertyKey, never>; Returns: string
                            }
           }
           Enums: {
-            "persona": "cheerleader"|"professor"|"friend"
+            "entry_status": "uploading"|"uploaded"|"processing"|"ready"|"failed","persona": "cheerleader"|"professor"|"friend"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -168,7 +274,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "persona": ["cheerleader", "professor", "friend"]
+            "entry_status": ["uploading", "uploaded", "processing", "ready", "failed"],"persona": ["cheerleader", "professor", "friend"]
           }
         }
 } as const

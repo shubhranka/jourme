@@ -36,7 +36,24 @@
       "expo-image",
       "expo-web-browser",
       "expo-sqlite",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Jourme uses the camera to scan the pages of your notebook.",
+          "recordAudioAndroid": false,
+          "microphonePermission": false,
+          "barcodeScannerEnabled": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Jourme opens your photos so you can add notebook pages you've already photographed.",
+          "cameraPermission": "Jourme uses the camera to scan the pages of your notebook.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

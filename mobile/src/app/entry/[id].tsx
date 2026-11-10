@@ -1,27 +1,36 @@
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
 
 import { Button, IconButton } from '@/components/buttons';
 import { Card } from '@/components/card';
 import { CorrectedText } from '@/components/corrected-text';
+import { FieldError } from '@/components/form';
 import { Screen } from '@/components/screen';
 import { Eyebrow, MoodTag, NoteTag } from '@/components/tags';
 import { Text } from '@/components/text';
 import { entries } from '@/data/mock';
 import { personaName } from '@/data/personas';
 import { formatLongDate } from '@/lib/dates';
+import { useSavedEntry } from '@/lib/entries';
 import { countWords, plural, sentenceHint } from '@/lib/text';
 import { colors, em, fonts, radii } from '@/theme/tokens';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Coach feedback for one entry. Listen / Read it back and the Sunday review caption are
 // hidden until those features ship.
 export default function EntryScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const entry = entries[id];
   const back = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
+  // Saved entries have UUIDs. The design's sample entries (still linked from Journal and
+  // Progress until Phase 5) don't, and keep the full feedback layout below.
+  if (UUID.test(id)) return <SavedEntryScreen id={id} back={back} />;
+
+  const entry = entries[id];
   if (!entry) {
     return (
       <Screen>
@@ -127,8 +136,87 @@ export default function EntryScreen() {
   );
 }
 
+// A saved entry before coaching: its pages, and where Coach's reply will go (Phase 4).
+function SavedEntryScreen({ id, back }: { id: string; back: () => void }) {
+  const query = useSavedEntry(id);
+  const entry = query.data;
+
+  if (!entry) {
+    return (
+      <Screen>
+        <IconButton icon="chevronLeft" accessibilityLabel="Back" onPress={back} />
+        {query.isPending ? (
+          <ActivityIndicator color={colors.primary} accessibilityLabel="Loading entry" />
+        ) : query.isError ? (
+          <View style={{ gap: 12 }}>
+            <FieldError>Couldn’t load this entry. Check your connection and try again.</FieldError>
+            <Button onPress={() => query.refetch()}>Try again</Button>
+          </View>
+        ) : (
+          <Text style={styles.h1}>Entry not found</Text>
+        )}
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen gap={20}>
+      <View style={styles.header}>
+        <IconButton icon="chevronLeft" accessibilityLabel="Back" onPress={back} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.h1} accessibilityRole="header">
+            {formatLongDate(entry.localDate)}
+          </Text>
+          <Text style={styles.muted13}>
+            Entry #{entry.number} · {plural(entry.pageCount, 'page')}
+          </Text>
+        </View>
+        {entry.justListen && (
+          <View style={styles.jlTag}>
+            <Text style={styles.jlTagText}>Just Listen</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.reply}>
+        <View style={styles.avatar} accessible={false}>
+          <Text style={styles.avatarText}>C</Text>
+        </View>
+        <View style={styles.bubble}>
+          <Text style={styles.bubbleBy}>Coach</Text>
+          <Text style={styles.bubbleText}>
+            {entry.pageCount === 1 ? 'Your page is saved.' : 'Your pages are saved.'} I haven’t read{' '}
+            {entry.pageCount === 1 ? 'it' : 'them'} yet.
+          </Text>
+        </View>
+      </View>
+
+      <View style={{ gap: 10 }}>
+        <Eyebrow>{entry.pageCount === 1 ? 'Your page' : 'Your pages'}</Eyebrow>
+        {entry.pages.map((p) => (
+          <Card key={p.index} style={styles.photoCard}>
+            <View style={styles.photo}>
+              {p.url ? (
+                <Image source={{ uri: p.url }} style={StyleSheet.absoluteFill} contentFit="contain" accessibilityLabel={`Page ${p.index + 1}`} />
+              ) : (
+                <Text style={styles.muted13}>This photo couldn’t be loaded.</Text>
+              )}
+            </View>
+            {entry.pageCount > 1 && <Text style={styles.photoCaption}>Page {p.index + 1}</Text>}
+          </Card>
+        ))}
+      </View>
+    </Screen>
+  );
+}
+
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  jlTag: { borderRadius: radii.pill, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: colors.navy },
+  jlTagText: { fontFamily: fonts.bold, fontSize: 12, color: '#FFFFFF' },
+  photoCard: { padding: 10, gap: 8 },
+  photo: { width: '100%', aspectRatio: 3 / 4, borderRadius: radii.sm, overflow: 'hidden', backgroundColor: colors.scanner.paper, alignItems: 'center', justifyContent: 'center' },
+  photoCaption: { fontFamily: fonts.semibold, fontSize: 12, color: colors.muted, textAlign: 'center' },
   h1: { fontFamily: fonts.bold, fontSize: 18 },
   muted13: { fontSize: 13, color: colors.muted },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

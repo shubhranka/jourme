@@ -44,6 +44,15 @@ const ICONS = {
     </>
   ),
   check: <Path d="M5 12.5l4.5 4.5L19 7.5" />,
+  // Not in the design: photo import and page delete on Scan.
+  image: (
+    <>
+      <Rect x={3} y={4} width={18} height={16} rx={2} />
+      <Circle cx={9} cy={10} r={2} />
+      <Path d="M21 16l-5-5-9 9" />
+    </>
+  ),
+  trash: <Path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof ICONS;

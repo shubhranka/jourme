@@ -39,7 +39,27 @@ export type Streak = {
   days: number;
   writtenToday: boolean;
   week: WeekDayState[]; // Monday first
+  today: LocalDate; // the journal day (rolls over at 4 AM)
 };
+
+export type Prompt = { id: number; text: string };
+
+// uploading → uploaded → processing → ready | failed (the coach, Phase 4)
+export type EntryStatus = 'uploading' | 'uploaded' | 'processing' | 'ready' | 'failed';
+
+// A saved entry before (or without) coaching, as listed on Today.
+export type EntrySummary = {
+  id: string;
+  number: number;
+  localDate: LocalDate;
+  status: EntryStatus;
+  justListen: boolean;
+  pageCount: number;
+};
+
+export type EntryPage = { index: number; url: string | null };
+
+export type SavedEntry = EntrySummary & { pages: EntryPage[] };
 
 export type TrackerStatus = 'needs-work' | 'improving' | 'new' | 'mastered';
 

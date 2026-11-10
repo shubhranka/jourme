@@ -7,16 +7,19 @@ import { Card } from '@/components/card';
 import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
-import { entries, MOCK_TODAY, moodsByDate, onThisDayEntryId, stats } from '@/data/mock';
+import { entries, MOCK_TODAY, moodsByDate, onThisDayEntryId } from '@/data/mock';
 import type { Mood } from '@/data/types';
 import { formatMonth, formatShortDate, monthGrid, parseLocalDate, toLocalDate } from '@/lib/dates';
+import { useProfileStats } from '@/lib/entries';
+import { plural } from '@/lib/text';
 import { MOOD_ORDER, MOODS } from '@/theme/moods';
 import { colors, em, fonts, radii } from '@/theme/tokens';
 
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-// Search results arrive with full-text search in Phase 5.
+// Search results, the calendar and On this day become real in Phase 5; the page count is real.
 export default function JournalScreen() {
+  const pageCount = useProfileStats().data?.pageCount ?? 0;
   const today = parseLocalDate(MOCK_TODAY);
   const [month, setMonth] = useState({ year: today.getFullYear(), month: today.getMonth() });
   const [query, setQuery] = useState('');
@@ -52,7 +55,7 @@ export default function JournalScreen() {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder={`Search ${stats.pageCount} handwritten pages`}
+          placeholder={`Search ${plural(pageCount, 'handwritten page')}`}
           placeholderTextColor={colors.muted}
           accessibilityLabel="Search your notebook"
           returnKeyType="search"

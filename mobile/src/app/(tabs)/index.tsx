@@ -1,62 +1,51 @@
 import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button, IconButton } from '@/components/buttons';
 import { Card } from '@/components/card';
 import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
-import { MoodTag } from '@/components/tags';
 import { Text } from '@/components/text';
-import { entries, latestEntryId, MOCK_TODAY, onThisDayEntryId, prompts, streak } from '@/data/mock';
-import type { WeekDayState } from '@/data/types';
-import { formatLongDate, greeting, parseLocalDate, relativeDay } from '@/lib/dates';
+import type { EntrySummary, Streak, WeekDayState } from '@/data/types';
+import { formatLongDate, greeting, relativeDay, toLocalDate } from '@/lib/dates';
+import { useLatestEntry, useShufflePrompt, useStreak, useTodayPrompt } from '@/lib/entries';
 import { useProfile } from '@/lib/profile';
+import { plural } from '@/lib/text';
 import { colors, em, fonts, radii } from '@/theme/tokens';
 
 const WEEK_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-// The greeting uses the real profile; streak, prompt and entries are mock data until Phase 3.
+// Shown until the first load (a few hundred ms); never mistaken for real data.
+const NO_STREAK: Streak = { days: 0, writtenToday: false, week: Array<WeekDayState>(7).fill('empty'), today: toLocalDate(new Date()) };
+
+// "On this day" comes back with the journal queries in Phase 5 (hidden without an entry from a year ago).
 export default function TodayScreen() {
   const router = useRouter();
   const profile = useProfile();
-  const [promptIndex, setPromptIndex] = useState(0);
-  const latest = entries[latestEntryId];
-  const flashback = entries[onThisDayEntryId];
+  const streakQuery = useStreak();
+  const prompt = useTodayPrompt();
+  const shuffle = useShufflePrompt();
+  const latest = useLatestEntry();
   if (!profile) return null;
+
+  const streak = streakQuery.data ?? NO_STREAK;
 
   return (
     <Screen>
       <View>
-        <Text style={styles.date}>{formatLongDate(MOCK_TODAY)}</Text>
+        <Text style={styles.date}>{formatLongDate(streak.today)}</Text>
         <Text style={styles.h1} accessibilityRole="header">
           {greeting(new Date().getHours())}, {profile.name}
         </Text>
       </View>
 
-      <Card style={styles.streak} accessibilityLabel={`${streak.days}-day streak`}>
-        <View style={styles.row}>
-          <View style={styles.flame}>
-            <Icon name="flame" size={22} />
-          </View>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={styles.streakTitle}>{streak.days}-day streak</Text>
-            <Text style={styles.muted13}>{streak.writtenToday ? 'Written today. See you tomorrow' : 'Write tonight to keep it alive'}</Text>
-          </View>
-        </View>
-        <View style={styles.week}>
-          {streak.week.map((state, i) => (
-            <View key={i} style={styles.weekDay}>
-              <Text style={styles.weekLabel}>{WEEK_LABELS[i]}</Text>
-              <View style={[styles.dot, DOT_STYLES[state]]} />
-            </View>
-          ))}
-        </View>
-      </Card>
+      <StreakCard streak={streak} />
 
       <View style={styles.prompt}>
         <Text style={styles.promptEyebrow}>{"Tonight's prompt"}</Text>
-        <Text style={styles.promptText}>{prompts[promptIndex]}</Text>
+        <Text style={styles.promptText} accessibilityLiveRegion="polite" aria-live="polite">
+          {prompt.data?.text ?? (prompt.isError ? 'Write about anything that’s on your mind tonight.' : ' ')}
+        </Text>
         <View style={styles.row10}>
           <Button variant="white" style={{ flex: 1 }} onPress={() => router.push('/scan')}>
             <Icon name="camera" size={20} />
@@ -68,46 +57,75 @@ export default function TodayScreen() {
             variant="bare"
             strokeWidth={1.9}
             color="#FFFFFF"
-            style={styles.shuffle}
-            onPress={() => setPromptIndex((i) => (i + 1) % prompts.length)}
+            disabled={shuffle.isPending || !prompt.data}
+            style={[styles.shuffle, shuffle.isPending && { opacity: 0.5 }]}
+            onPress={() => shuffle.mutate()}
           />
         </View>
       </View>
 
-      <Link href={{ pathname: '/entry/[id]', params: { id: latest.id } }} asChild>
-        <Pressable>
-          <Card style={{ gap: 10 }}>
-            <View style={styles.between}>
-              <Text style={styles.muted13semi}>
-                {relativeDay(latest.localDate, MOCK_TODAY)} · Entry #{latest.number}
-              </Text>
-              <MoodTag mood={latest.mood} size="sm" />
-            </View>
-            <Text style={styles.excerpt} numberOfLines={2}>
-              {latest.transcript}
-            </Text>
-            <View style={styles.row6}>
-              <Text style={styles.link}>
-                {latest.notes.length} notes from Coach
-              </Text>
-              <Icon name="chevronRight" size={16} strokeWidth={2} color={colors.primary} />
-            </View>
-          </Card>
-        </Pressable>
-      </Link>
-
-      <Link href={{ pathname: '/entry/[id]', params: { id: flashback.id } }} asChild>
-        <Pressable style={styles.flashback}>
-          <Icon name="history" size={22} strokeWidth={1.8} />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={styles.flashbackEyebrow}>On this day, {parseLocalDate(flashback.localDate).getFullYear()}</Text>
-            <Text style={styles.flashbackQuote} numberOfLines={1}>
-              “{flashback.transcript}”
-            </Text>
-          </View>
-        </Pressable>
-      </Link>
+      {latest.data && <LatestEntryCard entry={latest.data} today={streak.today} />}
     </Screen>
+  );
+}
+
+function StreakCard({ streak }: { streak: Streak }) {
+  const title = streak.days === 0 ? 'Start your streak' : `${streak.days}-day streak`;
+  const note = streak.writtenToday
+    ? 'Written today. See you tomorrow'
+    : streak.days === 0
+      ? 'Write tonight to begin'
+      : 'Write tonight to keep it alive';
+  return (
+    <Card style={styles.streak} accessible accessibilityLabel={`${title}. ${note}`}>
+      <View style={styles.row}>
+        <View style={styles.flame}>
+          <Icon name="flame" size={22} />
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.streakTitle}>{title}</Text>
+          <Text style={styles.muted13}>{note}</Text>
+        </View>
+      </View>
+      <View style={styles.week}>
+        {streak.week.map((state, i) => (
+          <View key={i} style={styles.weekDay}>
+            <Text style={styles.weekLabel}>{WEEK_LABELS[i]}</Text>
+            <View style={[styles.dot, DOT_STYLES[state]]} />
+          </View>
+        ))}
+      </View>
+    </Card>
+  );
+}
+
+// Before coaching (Phase 4) there's no mood, excerpt or notes yet: the card says the pages are
+// saved and opens them.
+function LatestEntryCard({ entry, today }: { entry: EntrySummary; today: string }) {
+  return (
+    <Link href={{ pathname: '/entry/[id]', params: { id: entry.id } }} asChild>
+      <Pressable accessibilityRole="link">
+        <Card style={{ gap: 10 }}>
+          <View style={styles.between}>
+            <Text style={styles.muted13semi}>
+              {relativeDay(entry.localDate, today)} · Entry #{entry.number}
+            </Text>
+            {entry.justListen && (
+              <View style={styles.jlTag}>
+                <Text style={styles.jlTagText}>Just Listen</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.waiting}>
+            {plural(entry.pageCount, 'page')} saved. Coach hasn’t read {entry.pageCount === 1 ? 'it' : 'them'} yet.
+          </Text>
+          <View style={styles.row6}>
+            <Text style={styles.link}>{entry.pageCount === 1 ? 'See your page' : 'See your pages'}</Text>
+            <Icon name="chevronRight" size={16} strokeWidth={2} color={colors.primary} />
+          </View>
+        </Card>
+      </Pressable>
+    </Link>
   );
 }
 
@@ -135,22 +153,11 @@ const styles = StyleSheet.create({
   dot: { width: 28, height: 28, borderRadius: 14 },
   prompt: { backgroundColor: colors.primary, borderRadius: radii.xxl, paddingTop: 22, paddingHorizontal: 20, paddingBottom: 20, gap: 18 },
   promptEyebrow: { fontFamily: fonts.bold, fontSize: 12, letterSpacing: em(12, 0.08), textTransform: 'uppercase', color: colors.primaryTint },
-  promptText: { fontFamily: fonts.semibold, fontSize: 26, lineHeight: 31, letterSpacing: em(26, -0.015), color: '#FFFFFF' },
+  promptText: { minHeight: 62, fontFamily: fonts.semibold, fontSize: 26, lineHeight: 31, letterSpacing: em(26, -0.015), color: '#FFFFFF' },
   buttonLabel: { fontFamily: fonts.bold, fontSize: 15 },
   shuffle: { width: 48, height: 48, borderRadius: radii.md, borderWidth: 1, borderColor: colors.primaryLine },
-  excerpt: { fontFamily: fonts.hand, fontSize: 22, lineHeight: 27.5, color: colors.handInk },
+  waiting: { fontSize: 15, lineHeight: 21, color: colors.inkSoft },
   link: { fontFamily: fonts.semibold, fontSize: 14, color: colors.primary },
-  flashback: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: colors.dashed,
-    borderRadius: radii.xl,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  flashbackEyebrow: { fontFamily: fonts.bold, fontSize: 12, letterSpacing: em(12, 0.06), textTransform: 'uppercase', color: colors.muted },
-  flashbackQuote: { fontFamily: fonts.medium, fontSize: 15 },
+  jlTag: { borderRadius: radii.pill, paddingVertical: 4, paddingHorizontal: 10, backgroundColor: colors.navy },
+  jlTagText: { fontFamily: fonts.bold, fontSize: 12, color: '#FFFFFF' },
 });

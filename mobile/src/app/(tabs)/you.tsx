@@ -7,8 +7,8 @@ import { PersonaField } from '@/components/profile-fields';
 import { Screen } from '@/components/screen';
 import { Eyebrow } from '@/components/tags';
 import { Text } from '@/components/text';
-import { stats } from '@/data/mock';
 import { signOut, useAuth } from '@/lib/auth';
+import { useProfileStats } from '@/lib/entries';
 import { saveErrorMessage, useProfile, useUpdateProfile } from '@/lib/profile';
 import { formatCount, formatTime12h, plural } from '@/lib/text';
 import { colors, em, fonts, radii } from '@/theme/tokens';
@@ -17,6 +17,7 @@ export default function YouScreen() {
   const profile = useProfile();
   const { session } = useAuth();
   const update = useUpdateProfile();
+  const stats = useProfileStats().data;
   if (!profile) return null;
 
   return (
@@ -30,9 +31,11 @@ export default function YouScreen() {
             <Text style={styles.name} accessibilityRole="header" numberOfLines={1}>
               {profile.name}
             </Text>
-            {/* Entry totals are mock data until entries exist (Phase 3). */}
+            {/* Words are counted from transcripts, so they start in Phase 4. */}
             <Text style={styles.muted13}>
-              {plural(stats.entryCount, 'entry', 'entries')} · {formatCount(stats.wordCount)} words written
+              {stats
+                ? `${plural(stats.entryCount, 'entry', 'entries')} · ${formatCount(stats.wordCount)} words written`
+                : ' '}
             </Text>
           </View>
         </Pressable>
