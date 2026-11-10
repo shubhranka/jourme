@@ -59,13 +59,18 @@ export type Progress = {
   crutchWords: CrutchWord[];
 };
 
+// The learner's settings (the `profiles` row).
 export type Profile = {
   name: string;
   persona: Persona;
-  nudgeTime: string; // HH:mm
+  nudgeTime: string; // HH:mm, in `timezone`
   nativeLanguage: string;
   learningGoal: string;
   offerJustListen: boolean;
+  timezone: string; // IANA, e.g. "Asia/Kolkata"
+};
+
+export type ProfileStats = {
   entryCount: number;
   wordCount: number;
   pageCount: number;

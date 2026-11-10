@@ -1,16 +1,11 @@
 // Phase 1 fixture data, matching the copy in the design. Replaced by Supabase queries in Phases 2–5.
 
-import type { Correction, Entry, LocalDate, Mood, Profile, Progress, Streak } from './types';
+import type { Correction, Entry, LocalDate, Mood, ProfileStats, Progress, Streak } from './types';
 
 export const MOCK_TODAY: LocalDate = '2026-10-27';
 
-export const profile: Profile = {
-  name: 'Meera',
-  persona: 'cheerleader',
-  nudgeTime: '21:30',
-  nativeLanguage: 'Hindi',
-  learningGoal: 'Sound natural at work',
-  offerJustListen: true,
+// The profile itself is real since Phase 2; these totals come from entries (Phase 3).
+export const stats: ProfileStats = {
   entryCount: 142,
   wordCount: 9860,
   pageCount: 142,

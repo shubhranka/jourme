@@ -8,18 +8,22 @@ import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
 import { MoodTag } from '@/components/tags';
 import { Text } from '@/components/text';
-import { entries, latestEntryId, MOCK_TODAY, onThisDayEntryId, profile, prompts, streak } from '@/data/mock';
+import { entries, latestEntryId, MOCK_TODAY, onThisDayEntryId, prompts, streak } from '@/data/mock';
 import type { WeekDayState } from '@/data/types';
 import { formatLongDate, greeting, parseLocalDate, relativeDay } from '@/lib/dates';
+import { useProfile } from '@/lib/profile';
 import { colors, em, fonts, radii } from '@/theme/tokens';
 
 const WEEK_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
+// The greeting uses the real profile; streak, prompt and entries are mock data until Phase 3.
 export default function TodayScreen() {
   const router = useRouter();
+  const profile = useProfile();
   const [promptIndex, setPromptIndex] = useState(0);
   const latest = entries[latestEntryId];
   const flashback = entries[onThisDayEntryId];
+  if (!profile) return null;
 
   return (
     <Screen>

@@ -1,92 +1,93 @@
-import { useState } from 'react';
+import { Link, type Href } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { FieldError } from '@/components/form';
 import { Icon } from '@/components/icon';
+import { PersonaField } from '@/components/profile-fields';
 import { Screen } from '@/components/screen';
 import { Eyebrow } from '@/components/tags';
 import { Text } from '@/components/text';
-import { profile } from '@/data/mock';
-import { PERSONAS } from '@/data/personas';
-import type { Persona } from '@/data/types';
+import { stats } from '@/data/mock';
+import { signOut, useAuth } from '@/lib/auth';
+import { saveErrorMessage, useProfile, useUpdateProfile } from '@/lib/profile';
 import { formatCount, formatTime12h, plural } from '@/lib/text';
 import { colors, em, fonts, radii } from '@/theme/tokens';
 
-// Setting pickers (nudge time, language, goal) are wired up with the profile in Phase 2.
 export default function YouScreen() {
-  const [persona, setPersona] = useState<Persona>(profile.persona);
-  const [offerJustListen, setOfferJustListen] = useState(profile.offerJustListen);
+  const profile = useProfile();
+  const { session } = useAuth();
+  const update = useUpdateProfile();
+  if (!profile) return null;
 
   return (
     <Screen>
-      <View style={styles.identity}>
-        <View style={styles.avatar} accessible={false}>
-          <Text style={styles.avatarText}>{profile.name.charAt(0)}</Text>
-        </View>
-        <View style={{ gap: 2 }}>
-          <Text style={styles.name} accessibilityRole="header">
-            {profile.name}
-          </Text>
-          <Text style={styles.muted13}>
-            {plural(profile.entryCount, 'entry', 'entries')} · {formatCount(profile.wordCount)} words written
-          </Text>
-        </View>
-      </View>
+      <Link href="/settings/name" asChild>
+        <Pressable style={styles.identity} accessibilityRole="button" accessibilityLabel={`${profile.name}. Edit name`}>
+          <View style={styles.avatar} accessible={false}>
+            <Text style={styles.avatarText}>{profile.name.charAt(0).toUpperCase()}</Text>
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={styles.name} accessibilityRole="header" numberOfLines={1}>
+              {profile.name}
+            </Text>
+            {/* Entry totals are mock data until entries exist (Phase 3). */}
+            <Text style={styles.muted13}>
+              {plural(stats.entryCount, 'entry', 'entries')} · {formatCount(stats.wordCount)} words written
+            </Text>
+          </View>
+        </Pressable>
+      </Link>
 
-      <View style={{ gap: 8 }} accessibilityRole="radiogroup" accessibilityLabel="Coach persona">
+      <View style={{ gap: 8 }}>
         <View style={{ marginBottom: 8 }}>
           <Eyebrow>Coach persona</Eyebrow>
         </View>
-        {PERSONAS.map((p) => {
-          const selected = p.id === persona;
-          return (
-            <Pressable
-              key={p.id}
-              onPress={() => setPersona(p.id)}
-              accessibilityRole="radio"
-              aria-checked={selected}
-              accessibilityLabel={`${p.name}. ${p.sample}`}
-              style={[styles.persona, selected && styles.personaSelected]}>
-              <View style={[styles.radio, selected && styles.radioOn]}>{selected && <View style={styles.radioDot} />}</View>
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text style={styles.personaName}>{p.name}</Text>
-                <Text style={styles.personaSample}>{p.sample}</Text>
-              </View>
-            </Pressable>
-          );
-        })}
+        <PersonaField value={profile.persona} onChange={(persona) => update.mutate({ persona })} />
       </View>
 
       <View style={styles.settings}>
-        <SettingRow label="Daily nudge" value={formatTime12h(profile.nudgeTime)} />
-        <SettingRow label="Native language" value={profile.nativeLanguage} />
-        <SettingRow label="Learning goal" value={profile.learningGoal} />
+        <SettingRow label="Daily nudge" value={formatTime12h(profile.nudgeTime)} href="/settings/nudge" />
+        <SettingRow label="Native language" value={profile.nativeLanguage} href="/settings/language" />
+        <SettingRow label="Learning goal" value={profile.learningGoal} href="/settings/goal" />
         <Pressable
-          onPress={() => setOfferJustListen((v) => !v)}
+          onPress={() => update.mutate({ offerJustListen: !profile.offerJustListen })}
           accessibilityRole="checkbox"
           accessibilityLabel="Ask about Just Listen. Offer it when an entry feels heavy"
-          aria-checked={offerJustListen}
+          aria-checked={profile.offerJustListen}
           style={styles.toggleRow}>
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={styles.rowLabel}>Ask about Just Listen</Text>
             <Text style={styles.rowHint}>Offer it when an entry feels heavy</Text>
           </View>
-          <View style={[styles.checkbox, offerJustListen && styles.checkboxOn]}>
-            {offerJustListen && <Icon name="check" size={16} strokeWidth={2.6} color="#FFFFFF" />}
+          <View style={[styles.checkbox, profile.offerJustListen && styles.checkboxOn]}>
+            {profile.offerJustListen && <Icon name="check" size={16} strokeWidth={2.6} color="#FFFFFF" />}
           </View>
         </Pressable>
       </View>
+      <FieldError>{update.error ? saveErrorMessage(update.error) : null}</FieldError>
+
+      <Pressable onPress={() => signOut()} accessibilityRole="button" style={styles.account}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.rowLabel}>Sign out</Text>
+          <Text style={styles.rowHint} numberOfLines={1}>
+            {session?.user.email}
+          </Text>
+        </View>
+      </Pressable>
     </Screen>
   );
 }
 
-function SettingRow({ label, value }: { label: string; value: string }) {
+function SettingRow({ label, value, href }: { label: string; value: string; href: Href }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue} numberOfLines={1}>
-        {value} ›
-      </Text>
-    </Pressable>
+    <Link href={href} asChild>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} style={styles.row}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={styles.rowValue} numberOfLines={1}>
+          {value} ›
+        </Text>
+      </Pressable>
+    </Link>
   );
 }
 
@@ -96,34 +97,6 @@ const styles = StyleSheet.create({
   avatarText: { fontFamily: fonts.bold, fontSize: 22, color: '#FFFFFF' },
   name: { fontFamily: fonts.bold, fontSize: 24, letterSpacing: em(24, -0.02) },
   muted13: { fontSize: 13, color: colors.muted },
-
-  persona: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: radii.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  // 1pt thicker border, so trim the padding to keep the text from shifting.
-  personaSelected: { backgroundColor: colors.primarySoft, borderWidth: 2, borderColor: colors.primary, paddingVertical: 13, paddingHorizontal: 15 },
-  radio: {
-    width: 20,
-    height: 20,
-    marginTop: 2,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: colors.faint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioOn: { borderWidth: 0, backgroundColor: colors.primary },
-  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFFFFF' },
-  personaName: { fontFamily: fonts.bold, fontSize: 15 },
-  personaSample: { fontSize: 13, lineHeight: 18, color: colors.inkSoft },
 
   settings: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radii.xl, overflow: 'hidden' },
   row: {
@@ -150,4 +123,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxOn: { borderWidth: 0, backgroundColor: colors.primary },
+  account: {
+    minHeight: 60,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.xl,
+  },
 });

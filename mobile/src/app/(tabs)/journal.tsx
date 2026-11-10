@@ -7,7 +7,7 @@ import { Card } from '@/components/card';
 import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
-import { entries, MOCK_TODAY, moodsByDate, onThisDayEntryId, profile } from '@/data/mock';
+import { entries, MOCK_TODAY, moodsByDate, onThisDayEntryId, stats } from '@/data/mock';
 import type { Mood } from '@/data/types';
 import { formatMonth, formatShortDate, monthGrid, parseLocalDate, toLocalDate } from '@/lib/dates';
 import { MOOD_ORDER, MOODS } from '@/theme/moods';
@@ -52,7 +52,7 @@ export default function JournalScreen() {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder={`Search ${profile.pageCount} handwritten pages`}
+          placeholder={`Search ${stats.pageCount} handwritten pages`}
           placeholderTextColor={colors.muted}
           accessibilityLabel="Search your notebook"
           returnKeyType="search"

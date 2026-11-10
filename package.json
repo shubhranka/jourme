@@ -5,7 +5,9 @@
   "scripts": {
     "bakeoff": "node --env-file-if-exists=.env scripts/ocr-bakeoff.ts",
     "test": "node --test \"scripts/**/*.test.ts\" \"supabase/functions/_shared/**/*.test.ts\"",
+    "test:db": "supabase test db",
     "typecheck": "tsc --noEmit",
+    "gen:types": "supabase gen types typescript --local > mobile/src/lib/database.types.ts",
     "supabase": "supabase"
   },
   "devDependencies": {
